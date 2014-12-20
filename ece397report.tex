@@ -1,0 +1,148 @@
+%\documentclass{article}
+%\usepackage[utf8]{inputenc}
+
+%\title{ECE 397 Report}
+%\author{ }
+%\date{December 2014}
+
+%\begin{document}
+
+%\maketitle
+
+%\section{Introduction}
+
+%\end{document}
+\title{ECE 397 Research Report}
+\author{
+        Bhargava Manja \\
+        manja2@illinois.edu\\
+}
+\date{\today}
+
+\documentclass[11pt]{article}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+This report aims to summarize my work with the DEPEND research group from
+October 2014 to December 2014. I first discuss the background of the project,
+and in Section II I present a review of related work. An overview of concolic
+execution and S2E is presented in Section III. In Section IV, I discuss the
+details of QEMU and KVM and how they fit together in this project. Section V
+presents plans for future work. 
+
+\subsection{Background}
+My research aims to use concolic execution to
+test the KVM hypervisor. In the context of this work, \textit{concolic
+execution} is a testing technique that performs symbolic execution, which
+treats program variables as symbolic values, along concrete execution
+paths. By combining symbolic execution, which can test whole classes of
+inputs at once, with selective concrete execution, we can test a large number of
+machine states and catch bugs that are simply impractical to find with unit
+tests \par
+ 
+I met with Zak and Cuong late last semester about working with DEPEND, but the
+process of selecting a project did not begin until early this semester. After
+much discussion, we chose to work on using concolic execution to test parts of
+KVM, due to my interest in programming languages and symbolic execution. \par
+This
+semester, I focused on understanding S2E, the concolic execution engine we
+decided to use, and how it could be used to test KVM. Due to time constraints
+and the process of learning, I performed mostly exploratory work, which will be
+expanded upon next semester.
+
+\subsection{Timeline}
+Details on each of the following items are presented throughout the rest of the
+report
+\begin{itemize}
+\item Joined the group and discussed potential projects
+\item Began learning about concolic execution, the architecture of KVM, and S2E,
+  a concolic execution engine that was to be used for the project
+\item Set up a Linux machine and completed a majority of the S2E tutorials
+\item Studied the implementation of AMD SVM support in QEMU to ascertain whether
+  it would be feasible to add support for the Intel VT-X instruction set
+\item Created a two tiered testing setup to test KVM's hardware acceleration
+  features with S2E
+\item Identified code paths to begin instrumentation for S2E's concolic
+  execution engine
+\item TODO: ran experiment
+\item 
+\end{itemize}
+
+\section{Concolic Execution}
+In \textit{unit testing}, programs are decomposed into functional units which
+are individually tested by generating inputs to functions that serve as entry
+points. Thus, assuming a collection of unit tests cover all code paths, the
+quality of testing reduces to the quality of test inputs. Manual generation of
+values leads to incomplete testing and necessitates changing inputs whenever the
+system changes, which is impractical. \par
+Several techniques are used to automate
+the production of high quality testing inputs. One scheme randomly chooses
+values from the space of possible inputs. This has two serious problems: first,
+many values may lead to the same states and behaviour, and second, the
+probability of selecting inputs that lead to bad states and buggy behaviour is
+often incredibly small, especially for any sizeable real world system that may
+have millions of discrete states. \par
+Another approach that eliminates redundant
+test input and improves code coverage is \textit{symbolic execution}, in which a
+program is executed with symbolic values as input. Each conditional expression
+represents a constraint that determines an execution path. Thus, the states of
+the program can be represented as an execution tree, where internal nodes
+represent conditional branches. By generating concrete values, we want to
+explore all the paths in the tree. However, as you can imagine, for any large
+software system the size of the execution tree is intractably large, and so can
+not be explored purely symbolically. A program with just ten binary branches
+yields $2^{10}$ different states. \par
+First proposed by Larson and Astin, (TODO
+cite) \textit{concolic execution} modifies the concept of symbolic execution to
+exploit its advantages while avoiding the combinatorial explosion of program
+states. With this approach, concrete execution accrues constraints at every
+branch point. These contraints are solved to generate new concrete inputs that
+direct execution along new paths. This idea has been refined, notably by
+Godefroid et. al and Sen, Marinov, and Agha here at the University of Illinois. 
+
+\section{Literature Review}
+Work has been done by other researchers pertaining to the use of concolic
+execution in testing. In particular, previous related work
+tends to focus on one of the following:
+\begin{itemize}
+\item Strategies to increase the effectiveness of concolic execution as a bug
+finding tool
+\item Concolic execution based testing of different classes of applications
+\item Comparisons between concolic testing and other forms of testing
+\item Novel uses of concolic execution analysis
+\end{itemize}
+
+\subsection{Increasing Testing Effectiveness}
+Because of both the inherent ineffeciency of using and keeping track of symbolic
+variables during program execution, much work has been done for the purpose of
+making concolic testing more effecient. Ineffeciencies exist because of the the
+sheer size of the space of possible program states. Many methods have been
+developed to prune the state tree. Flanagan and Godefroid introduce the idea
+of \textit{partial order reduction}, which identifies branches that do not
+depend on each other and utilizes concurrency to speed exploration and execution
+of these branches. The ``Boosting Concolic Testing'' paper develops the idea
+of \textit{interpolation}, which 
+
+\section{S2E}
+S2E is a platform for analyzing the behaviour of large and complex software
+systems with concolic execution. It introduces its own innovations on top of
+refinements made to the original idea. By providing stock \textit{selectors}
+and \textit{analyzers} (and the framework for writing your own) for program
+execution branches, S2E allows
+for \textit{selective symbolic execution} of those paths that are relevant to
+the quantity being tested or analyzed. For example, you may only be concerned
+with analyzing cache performance, in which case you could write a selector to
+explore paths touched by a particular 2D array. S2E will switch to symbolic
+execution only when required and will generate concrete values from constraints
+in all other cases (for example, when entering the kernel for a syscall). This
+increases the effeciency of symbolic execution and allows S2E to analyze
+complex real world software stacks. S2E was chosen for this project because of
+its performance, programmability, and ability to operate on binaries. 
+
+
+
+\bibliographystyle{abbrv} \bibliography{main}
+
+\end{document}
