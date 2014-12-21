@@ -1,17 +1,4 @@
 %\documentclass{article}
-%\usepackage[utf8]{inputenc}
-
-%\title{ECE 397 Report}
-%\author{ }
-%\date{December 2014}
-
-%\begin{document}
-
-%\maketitle
-
-%\section{Introduction}
-
-%\end{document}
 \title{ECE 397 Research Report}
 \author{
         Bhargava Manja \\
@@ -20,6 +7,12 @@
 \date{\today}
 
 \documentclass[11pt]{article}
+\usepackage[pdftex]{graphicx}
+\usepackage{listings}
+\usepackage{float}
+\usepackage{titling}
+\usepackage{subfigure}
+\usepackage{url}
 
 \begin{document}
 \maketitle
@@ -27,10 +20,10 @@
 \section{Introduction}
 This report aims to summarize my work with the DEPEND research group from
 October 2014 to December 2014. I first discuss the background of the project,
-and in Section II I present a review of related work. An overview of concolic
-execution and S2E is presented in Section III. In Section IV, I discuss the
-details of QEMU and KVM and how they fit together in this project. Section V
-presents plans for future work. 
+and in Section II I present an overview of concolic execution, followed by a
+brief review of related literature in Section III. This is followed by overviews
+of technologies used in this project, and finally by an description of the
+conclusions gathered this semester and plans for future work. 
 
 \subsection{Background}
 My research aims to use concolic execution to
@@ -66,8 +59,6 @@ report
   features with S2E
 \item Identified code paths to begin instrumentation for S2E's concolic
   execution engine
-\item TODO: ran experiment
-\item 
 \end{itemize}
 
 \section{Concolic Execution}
@@ -94,11 +85,10 @@ explore all the paths in the tree. However, as you can imagine, for any large
 software system the size of the execution tree is intractably large, and so can
 not be explored purely symbolically. A program with just ten binary branches
 yields $2^{10}$ different states. \par
-First proposed by Larson and Astin, (TODO
-cite) \textit{concolic execution} modifies the concept of symbolic execution to
+First proposed by Larson and Astin, \textit{concolic execution} modifies the concept of symbolic execution to
 exploit its advantages while avoiding the combinatorial explosion of program
 states. With this approach, concrete execution accrues constraints at every
-branch point. These contraints are solved to generate new concrete inputs that
+branch point. These constraints are solved to generate new concrete inputs that
 direct execution along new paths. This idea has been refined, notably by
 Godefroid et. al and Sen, Marinov, and Agha here at the University of Illinois. 
 
@@ -111,19 +101,70 @@ tends to focus on one of the following:
 finding tool
 \item Concolic execution based testing of different classes of applications
 \item Comparisons between concolic testing and other forms of testing
-\item Novel uses of concolic execution analysis
 \end{itemize}
 
 \subsection{Increasing Testing Effectiveness}
-Because of both the inherent ineffeciency of using and keeping track of symbolic
+Because of both the inherent inefficiency of using and keeping track of symbolic
 variables during program execution, much work has been done for the purpose of
-making concolic testing more effecient. Ineffeciencies exist because of the the
+making concolic testing more efficient. Inefficiencies exist because of the
 sheer size of the space of possible program states. Many methods have been
 developed to prune the state tree. Flanagan and Godefroid introduce the idea
 of \textit{partial order reduction}, which identifies branches that do not
 depend on each other and utilizes concurrency to speed exploration and execution
 of these branches. The ``Boosting Concolic Testing'' paper develops the idea
-of \textit{interpolation}, which 
+of \textit{interpolation}, which uses code annotations to ignore code paths that
+are guaranteed to not hit any bugs, thus greatly reducing the state tree. Seo
+and Kim created the idea of \textit{context guided search}, a method for
+choosing branches to explore based on the how the current branch was
+reached. Experiments presented in all these papers show orders of magnitude
+decreases in the amount of branches searched to reach a target code coverage. 
+
+\subsection{Testing Different Applications}
+Much of the work around concolic testing has involved applying the technique to
+different problem domains. For example, the Jalangi paper implements concolic testing for
+Javascript applications in the browser. The Sarkar paper discusses the use of
+concolic testing to test both the host language and query language of a SQL
+database application. All this work highlights the extensability of the methods
+used in this project, and offers clues on how to improve the testing of KVM.
+
+% \subsection{Comparisons with Other Testing Methodologies}
+% Since concolic testing is an alternative to other forms of testing, much
+% research has been done to quantify the differences. A study from Aalto
+% University aims to empirically determine concolic testing's benefits by
+% comparing the number of bugs found against randomized input generation for a
+% series of Java applets. The study concludes that ``concolic testing approaches
+% compare favorably to random testing and the test sets generated ... can find
+% more bugs than considerably bigger sets of randomly generated tests''. 
+
+\section{QEMU}
+QEMU, short for ``quick emulator'', is a program that enables pure software
+machine emulation via fast binary translation. When combined with KVM, it can
+harness processor support for virtualization and provide hardware
+acceleration. It underlies both S2E and the setup for this project.
+\subsection{Exploring Modifications to QEMU}
+A significant amount of time this semester was spent examining whether we could
+add support in QEMU for Intel's VT-x instructions. QEMU supports AMD's SVM
+instructions, so I studied this implementation to determine how feasible
+extending it to VT-x would be. The implementation was mostly confined to 4
+files:
+\begin{enumerate}
+\item target-i386/svm.h: Contains data structures that implement the Virtual
+Machine Code Block, which contains VM state and initialization information, as
+well as space for state to be saved on VMEXITs
+\item target-i386/svm\textunderscore helper.c: All the SVM instructions are implemented here as
+functions with signature helper\textunderscore <instruction>
+\item target-i386/helper.c: Uses QEMU macros to register functions in
+svn\textunderscore helper.c with one of QEMU's many dispatchers
+\item target-i386/translate.c: Massive switch case block that acts like a state
+machine, calls relevant SVM functions. Calls to those functions go through
+gen\textunderscore helper \textunderscore <instruction> functions that appear
+nowhere else. These stubs are points where the Tiny Code Generator is used to
+generate actual machine code. 
+\end{enumerate}
+Due to the complexity of the SVM implementation (which
+involves runtime function registration and code generation), and the fact that
+utilizing the SVM implementation was as simple as changing the OS and emulated
+CPU type in experiments, we decided against modifying QEMU.
 
 \section{S2E}
 S2E is a platform for analyzing the behaviour of large and complex software
@@ -139,9 +180,86 @@ execution only when required and will generate concrete values from constraints
 in all other cases (for example, when entering the kernel for a syscall). This
 increases the effeciency of symbolic execution and allows S2E to analyze
 complex real world software stacks. S2E was chosen for this project because of
-its performance, programmability, and ability to operate on binaries. 
+its documentation, programmability, and ability to operate on binaries. 
+\subsection{Using S2E}
+S2E's workflow is fairly simple. After preparing a QEMU disk image containing an
+OS, you must modify a target program's source with S2E ``instructions'', then
+compile the program and create a snapshot of the disk. Then, invoking S2E on the
+snapshot will begin the process of concolic execution, controlled by the use of
+the S2E instructions and runtime parameters. A simple example is shown below:
+\begin{figure}[htp]
+\begin{verbatim}
+#include <stdio.h>
+#include <string.h>
+#include "s2e.h"
 
+int main(void)
+{
+  char str[3];
 
+  s2e_enable_forking();
+  s2e_make_symbolic(str, 2, "str");
+
+  if(str[0] == '\n' || str[1] == '\n') {
+    printf("Not enough characters\n");
+  } else {
+    if(str[0] >= 'a' && str[0] <= 'z')
+      printf("First char is lowercase\n");
+    else
+      printf("First char is not lowercase\n");
+
+    if(str[0] >= '0' && str[0] <= '9')
+      printf("First char is a digit\n");
+    else
+      printf("First char is not a digit\n");
+
+    if(str[0] == str[1])
+      printf("First and second chars are the same\n");
+    else
+      printf("First and second chars are not the same\n");
+  }
+
+  s2e_disable_forking();
+
+  s2e_get_example(str, 2);
+  printf("'%c%c' %02x %02x\n", str[0], str[1],
+         (unsigned char) str[0], (unsigned char) str[1]);
+
+  return 0;
+}
+\end{verbatim}
+\caption{An example of a small program modified with S2E instructions}
+\end{figure}
+
+\section{Testing Setup}
+I set up the testbed for running S2E experiments on Strauss. After creating a
+raw 5GB disk image, I installed Ubuntu 12.04, then used LVM (Logical Volume
+Manager) to increase the disk space and copied the original disk image into the
+VM. I run the outer VM with KVM disabled and SVM enabled, log in, and launch the
+inner VM with KVM enabled. This allows us to test KVM with S2E. \par
+
+To actually run experiments, I had to identify two things:
+\begin{enumerate}
+\item The location of VMEXIT handlers in KVM
+\item The 'parameters' that determined behavior at those locations
+\end{enumerate}
+
+The first location I found was in the KVM svm implementation. The only parameter
+of this location is the VM Control Block, which consists of many fields. Thus,
+the first experiment performed will be to analyze the behavior of KVM when the
+VMCB exit code field is made symbolic - that is, we aim to examine all the
+different possible code paths reached with different values of the exit code
+field in the VMCB. 
+
+\section{Conclusions}
+This semester, I learned about Linux virtualization technologies and symbolic
+execution as a software testing tool. Though I have some background in security,
+systems, and programming language/compiler technologies, I have never worked in
+the intersection of these three fields, a process which I found very
+edifying. Most of my time this semester was spent learning the
+technologies used in this project, exploring various avenues of inquiry, and
+setting up testing environments, so I plan on using the spring semester to
+gather data and quantitatively examine KVM with S2E.
 
 \bibliographystyle{abbrv} \bibliography{main}
 
