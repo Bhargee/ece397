@@ -100,7 +100,6 @@ tends to focus on one of the following:
 \item Strategies to increase the effectiveness of concolic execution as a bug
 finding tool
 \item Concolic execution based testing of different classes of applications
-\item Comparisons between concolic testing and other forms of testing
 \end{itemize}
 
 \subsection{Increasing Testing Effectiveness}
@@ -126,15 +125,6 @@ Javascript applications in the browser. The Sarkar paper discusses the use of
 concolic testing to test both the host language and query language of a SQL
 database application. All this work highlights the extensability of the methods
 used in this project, and offers clues on how to improve the testing of KVM.
-
-% \subsection{Comparisons with Other Testing Methodologies}
-% Since concolic testing is an alternative to other forms of testing, much
-% research has been done to quantify the differences. A study from Aalto
-% University aims to empirically determine concolic testing's benefits by
-% comparing the number of bugs found against randomized input generation for a
-% series of Java applets. The study concludes that ``concolic testing approaches
-% compare favorably to random testing and the test sets generated ... can find
-% more bugs than considerably bigger sets of randomly generated tests''. 
 
 \section{QEMU}
 QEMU, short for ``quick emulator'', is a program that enables pure software
@@ -168,25 +158,43 @@ CPU type in experiments, we decided against modifying QEMU.
 
 \section{S2E}
 S2E is a platform for analyzing the behaviour of large and complex software
-systems with concolic execution. It introduces its own innovations on top of
-refinements made to the original idea. By providing stock \textit{selectors}
-and \textit{analyzers} (and the framework for writing your own) for program
-execution branches, S2E allows
-for \textit{selective symbolic execution} of those paths that are relevant to
-the quantity being tested or analyzed. For example, you may only be concerned
-with analyzing cache performance, in which case you could write a selector to
-explore paths touched by a particular 2D array. S2E will switch to symbolic
-execution only when required and will generate concrete values from constraints
-in all other cases (for example, when entering the kernel for a syscall). This
-increases the effeciency of symbolic execution and allows S2E to analyze
-complex real world software stacks. S2E was chosen for this project because of
-its documentation, programmability, and ability to operate on binaries. 
-\subsection{Using S2E}
-S2E's workflow is fairly simple. After preparing a QEMU disk image containing an
-OS, you must modify a target program's source with S2E ``instructions'', then
-compile the program and create a snapshot of the disk. Then, invoking S2E on the
-snapshot will begin the process of concolic execution, controlled by the use of
-the S2E instructions and runtime parameters. A simple example is shown below:
+systems with concolic execution. S2E uses virtualization to allow
+analysis during normal operation of the tested software, unlike other tools
+which use models or stubs. S2E also performs binary translation, allowing it to
+execute directly on binaries. Two important concepts of S2E
+are \textit{selectors} and \textit{analyzers}. S2E performs automated path exploration by executing
+code paths in parallel, but for the sake of efficiency it tries to only execute
+paths that are of interest with regards to the intent of the testing being
+performed. Selectors guide exploration by specifying paths of interest. For
+example, we may be interested in all paths that touch a specific memory object,
+paths influenced by a specific parameter, paths inside a target code module,
+etc. During exploration, analyzers collect information or check that the desired
+properties of a path (to look for bugs). S2E comes with many stock selectors and
+analyzers, but they can also be written from scratch with the S2E API. \par
+The typical S2E user only needs to define in a configuration file the desired
+selectors and analyzers along with the corresponding parameters, start up the
+desired software stack inside the S2E virtual machine, and run the S2E launcher
+in the guest OS, which starts the desired application and communicates with the
+S2E VM underneath via custom S2E opcodes. \par
+The S2E paper provides the example of trying to verify the code that handles
+license keys in a proprietary program, such as Adobe Photoshop. The user
+installs the program in the S2E Windows VM and launches the program using
+s2e.exe. From inside the guest OS, the s2e.exe
+launcher communicates with S2E. In the S
+2E configuration file, the tester may choose a memory-checker analyzer along
+with a path selector that returns a symbolic string whenever Photoshop reads
+a specific registry entry from the Windows registry. S2E
+then automatically explores the code paths in Photoshop that are influenced by
+the value of the license key and looks for memory safety errors along those 
+paths. \par
+\subsection{S2E Opcodes}
+S2E opcodes are custom binary opcodes inserted into S2E VM guest programs, and
+which are directly interpreted by S2E. They do things like making values
+symbolic, logging debug information, enabling multipath execution, etc. The
+simplest way of inserting them into a program is to use the higher level S2E C
+API, defined in the file s2e.h, which comes with the S2E distribution. This
+requires sight modification to the target program.
+A simple example of a modified program is shown below:
 \begin{figure}[htp]
 \begin{verbatim}
 #include <stdio.h>
@@ -230,13 +238,127 @@ int main(void)
 \end{verbatim}
 \caption{An example of a small program modified with S2E instructions}
 \end{figure}
+\newpage
+This simple program has been modified to make the str variable symbolic. By
+enabling forking, we tell S2E to explore the different states that can be
+reached in each of the branches introduced by the conditional
+statements. Finally, the call to s2e\textunderscore get\textunderscore example
+solves the accrued path constraints to generate a concrete value indicative of a
+possible end value of the str variable. A more direct route, when the source
+code of a target program is not available, is to directly modify a compiled
+binary with S2E opcodes.
+
+\subsection{Selective Symbolic Execution}
+The killer feature of S2E (and any concolic analysis tool) is its ability to
+drastically reduce the analyzed state space of a program with \textit{selective
+symbolic execution}. The idea is to treat a program as a superposition of all
+possible execution paths, which we can visualize as a tree, with each root -
+leaf path corresponding to an execution path. Then, variables can thought of as
+superpositions of all possible values they can take instead of concrete
+values. Any time a branch depends on some symbolic variable $x$, we split
+execution into two different executions, each with $x$ constrained s required to
+cause the branch to take that path. This process continues recursively, with
+paths executed in parallel. Only some of these paths actually matter; many can
+be ignored without effecting the quality of testing or analysis. Thus, S2E
+performs \textit{transitions} between symbolic and concrete execution. The
+symbolic execution is reserved for paths and sections that we care about. For
+example, if we wish to test a shared library, but don't care about execution
+paths through applications that use that library or the kernel, our execution
+tree might look something like this:
+\begin{figure}[htp]
+\centering
+        \includegraphics{exec_tree}
+\caption{An example of an execution tree. Symbolic execution occurs in the
+shaded areas}
+\end{figure}
+\newpage
+There are two kinds of transitions: from concrete to symbolic and from symbolic
+to concrete. In the above example, this type of transition would occur when app
+calls into lib with a concrete argument. This argument is made symbolic,
+possibly with constrains (for example, $x > 20, x \% 2 == 0$). Lib is executed
+both symbolically and concretely, with the concrete argument from app. When lib
+is finished, the concrete value from the concrete execution is returned to app,
+but lib has been explored symbolically as well. \par
+The transition from symbolic to concrete is slightly more complicated. Simply
+put, when a symbolic variable needs to be made concrete (for output or writing
+to disk, for example), its \textit{path constraints} (constraints on the
+variable that are required for this particular execution point to be reached)
+are solved, yielding a concrete value. This value is added to the path
+constraints, for the sake of correctness (because the further execution of the
+path depends on the concrete value in some way). 
+
+\subsection{Architecture of S2E}
+S2E depends on parts of QEMU, the KLEE symbolic execution engine, and LLVM. S2E
+explores paths by executing a target program in a virtual machine and executing
+paths of interest symbolically, as discussed previously. QEMU is used to perform
+dynamic binary translation of the target program and system. During concrete
+execution, the end product of the dynamic translation is executed by the host
+machine's physical CPU. During symbolic execution, guest instructions (including
+S2E opcodes) are translated into LLVM IR and executed by KLEE. S2E transparently
+converts data between symbolic and concrete formats, providing the illusion of
+full symbolic execution. The following diagram shows the different parts of the
+S2E system:
+\begin{figure}[htp]
+\centering
+    \includegraphics[scale=.3]{s2e_arch}
+\caption{An illustration of the S2E system}
+\end{figure}
+\newpage
+The nature of S2E creates a unique challenge with regards to this project. We
+want to test parts of KVM, which executes some guest instructions on physical
+CPUs with virtualization instructions (VT-x or SVM). This is not suitable for
+direct analysis with S2E, as S2E needs to translate all instructions into LLVM IR
+for analysis with KLEE, and the translation of virtualization instructions is
+not supported. Thus, in the next few 
+sections, I explain the testing environment developed for this project. 
+
+\subsection{Using S2E}
+The goal for this project is to use S2E to examine all possible VMEXIT states to
+look for bugs. Given the complexity of the systems at play, it is impossible to
+do any sort of reasonable analysis using unit testing (too little code coverage)
+or symbolic execution (too many possible states). By leveraging the power of
+concolic execution, we can enjoy the benefits of symbolic execution while
+getting around the issue of combinatorial explosion in the state space. \par
+
+The challenge now is to design experiments that get around the problem of state
+space explosion while providing meaningful results and insight. One method we
+have tried is to make symbolic values that, while important to the function of
+KVM, are not so widely used that they force the analysis of a huge number of
+states. For example, the very first experiment used the 'exit\textunderscore
+code' field of the VMCB. This field is used by KVM to determine what caused a
+VMEXIT, and to handle errors. Thus it is important in directing the program flow
+of KVM and QEMU, but it is only read and written to in a small number of
+locations. Thus, the modifications required are extremely simple. Below is a
+graphical depiction of what we aim to do:
+\begin{figure}[htp]
+\centering
+    \includegraphics[scale=.7]{qemu_trap.pdf}
+\end{figure}
+\newpage
+By instrumenting the code that determines behavior in the highlighted area of
+operation, we hope to find bugs that are impractical to find without the aid of
+concolic execution.
+
 
 \section{Testing Setup}
 I set up the testbed for running S2E experiments on Strauss. After creating a
 raw 5GB disk image, I installed Ubuntu 12.04, then used LVM (Logical Volume
 Manager) to increase the disk space and copied the original disk image into the
 VM. I run the outer VM with KVM disabled and SVM enabled, log in, and launch the
-inner VM with KVM enabled. This allows us to test KVM with S2E. \par
+inner VM with KVM enabled. This allows us to test KVM with S2E. A figure
+illustrating the testing environment follows:
+\begin{figure}[htp]
+\centering
+    \includegraphics[scale=.7]{test_setup}
+\caption{The environment developed for running experiments}
+\end{figure}
+\newpage
+This setup gets around the problem of S2E's lack of support for symbolic
+execution of virtualization instructions. KVM is disabled in the first layer so
+that symbolic execution will work, and is enabled in the second layer so that
+KVM can be symbolically executed. Now, KVM instructions are emulated by QEMU,
+and so can be symbolically executed. 
+\par
 
 To actually run experiments, I had to identify two things:
 \begin{enumerate}
