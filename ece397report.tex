@@ -90,7 +90,8 @@ exploit its advantages while avoiding the combinatorial explosion of program
 states. With this approach, concrete execution accrues constraints at every
 branch point. These constraints are solved to generate new concrete inputs that
 direct execution along new paths. This idea has been refined, notably by
-Godefroid et. al and Sen, Marinov, and Agha here at the University of Illinois. 
+Godefroid et. al \cite{Godefroid} and Sen, Marinov, and
+Agha \cite{Sen} here at the University of Illinois. 
 
 \section{Literature Review}
 Work has been done by other researchers pertaining to the use of concolic
@@ -107,21 +108,21 @@ Because of both the inherent inefficiency of using and keeping track of symbolic
 variables during program execution, much work has been done for the purpose of
 making concolic testing more efficient. Inefficiencies exist because of the
 sheer size of the space of possible program states. Many methods have been
-developed to prune the state tree. Flanagan and Godefroid introduce the idea
+developed to prune the state tree. Flanagan and Godefroid \cite{Godefroid} introduce the idea
 of \textit{partial order reduction}, which identifies branches that do not
 depend on each other and utilizes concurrency to speed exploration and execution
-of these branches. The ``Boosting Concolic Testing'' paper develops the idea
+of these branches. The ``Boosting Concolic Testing'' paper \cite{Jaffar} develops the idea
 of \textit{interpolation}, which uses code annotations to ignore code paths that
 are guaranteed to not hit any bugs, thus greatly reducing the state tree. Seo
-and Kim created the idea of \textit{context guided search}, a method for
+and Kim created the idea of \textit{context guided search} \cite{Seo}, a method for
 choosing branches to explore based on the how the current branch was
 reached. Experiments presented in all these papers show orders of magnitude
 decreases in the amount of branches searched to reach a target code coverage. 
 
 \subsection{Testing Different Applications}
 Much of the work around concolic testing has involved applying the technique to
-different problem domains. For example, the Jalangi paper implements concolic testing for
-Javascript applications in the browser. The Sarkar paper discusses the use of
+different problem domains. For example, the Jalangi paper \cite{Jalangi} implements concolic testing for
+Javascript applications in the browser. The Sarkar paper \cite{Sarkar} discusses the use of
 concolic testing to test both the host language and query language of a SQL
 database application. All this work highlights the extensability of the methods
 used in this project, and offers clues on how to improve the testing of KVM.
@@ -186,7 +187,7 @@ with a path selector that returns a symbolic string whenever Photoshop reads
 a specific registry entry from the Windows registry. S2E
 then automatically explores the code paths in Photoshop that are influenced by
 the value of the license key and looks for memory safety errors along those 
-paths. \par
+paths \cite{s2e}. \par
 \subsection{S2E Opcodes}
 S2E opcodes are custom binary opcodes inserted into S2E VM guest programs, and
 which are directly interpreted by S2E. They do things like making values
@@ -383,6 +384,6 @@ technologies used in this project, exploring various avenues of inquiry, and
 setting up testing environments, so I plan on using the spring semester to
 gather data and quantitatively examine KVM with S2E.
 
-\bibliographystyle{abbrv} \bibliography{main}
+\bibliographystyle{plain} \bibliography{report}
 
 \end{document}
